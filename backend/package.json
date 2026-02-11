@@ -1,0 +1,13 @@
+{
+  "name": "outpost-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Outpost Lambda function handlers",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "typescript": "^5.7.0"
+  }
+}

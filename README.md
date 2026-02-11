@@ -28,9 +28,9 @@ The output is a structured list of companies with summaries and ready-to-send em
 
 ## Example Use Cases
 
-- Founders contacting potential partners or early customers  
-- Freelancers and consultants prospecting new clients  
-- Anyone who needs personalized outreach at scale  
+- Founders contacting potential partners or early customers
+- Freelancers and consultants prospecting new clients
+- Anyone who needs personalized outreach at scale
 
 Outpost is designed to be **general-purpose**, with flexible prompts that adapt to different outreach goals.
 
@@ -53,39 +53,44 @@ Outpost is built as a cloud-native, event-driven system on AWS.
 
 ### Core Components
 
-- **API Gateway** – Entry point for client requests  
-- **AWS Lambda** – Stateless processing (discovery, scraping, enrichment, generation)  
-- **AWS Step Functions** – Workflow orchestration  
-- **DynamoDB** – Persistent storage for runs and leads  
-- **Amazon S3** – Storage for raw website data and exports  
-- **LLM Provider (Bedrock / OpenAI)** – Summarization and email generation  
+- **API Gateway** – Entry point for client requests
+- **AWS Lambda** – Stateless processing (discovery, scraping, enrichment, generation)
+- **AWS Step Functions** – Workflow orchestration
+- **DynamoDB** – Persistent storage for runs and leads
+- **Amazon S3** – Storage for raw website data and exports
+- **LLM Provider (Bedrock / OpenAI)** – Summarization and email generation
 
 This architecture enables:
 
-- Reliable background job execution  
-- Automatic retries and failure handling  
-- Horizontal scaling without managing servers  
+- Reliable background job execution
+- Automatic retries and failure handling
+- Horizontal scaling without managing servers
 
 ---
 
 ## Tech Stack
 
 ### Frontend
+
 - Next.js
 
 ### Backend
-- AWS Lambda  
-- API Gateway  
-- Step Functions  
+
+- AWS Lambda
+- API Gateway
+- Step Functions
 
 ### Storage
-- DynamoDB  
-- Amazon S3  
+
+- DynamoDB
+- Amazon S3
 
 ### AI
+
 - LLM integration (TBD)
 
 ### Infrastructure
+
 - AWS CDK (Infrastructure as Code)
 
 ---
@@ -96,9 +101,9 @@ Cold outreach requires repetitive research and writing that can be automated.
 
 Outpost explores how cloud-native systems and AI models can work together to:
 
-- Automate real-world workflows  
-- Orchestrate complex background jobs  
-- Generate useful outputs, not demos  
+- Automate real-world workflows
+- Orchestrate complex background jobs
+- Generate useful outputs, not demos
 
 The goal is to demonstrate production-style system design and practical AI usage.
 
