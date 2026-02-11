@@ -8,6 +8,11 @@
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^25.2.3",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.987.0",
+    "@aws-sdk/lib-dynamodb": "^3.987.0"
   }
 }
