@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const handler = (_event: APIGatewayProxyEvent): APIGatewayProxyResult => {
   // TODO: Parse search query from event.body, store a new run in DynamoDB
   return {
     statusCode: 200,
