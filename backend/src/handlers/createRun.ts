@@ -8,9 +8,14 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.RUNS_TABLE_NAME!;
 
+interface RunRequestBody {
+  query?: string;
+  location?: string;
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const body = JSON.parse(event.body || '{}');
+    const body = JSON.parse(event.body || '{}') as RunRequestBody;
 
     if (!body.query) {
       return {
