@@ -68,6 +68,19 @@ This architecture enables:
 
 ---
 
+---
+
+## Roadmap
+
+- [x] **Core Backend**: Serverless API for managing research runs.
+- [x] **Event-Driven Architecture**: Asynchronous processing pipeline using DynamoDB Streams.
+- [x] **Infrastructure as Code**: Fully automated deployment with AWS CDK.
+- [ ] **Real-Time Search**: Integrate SerpApi for live web search results.
+- [ ] **AI Analysis**: Implement LLM-based summarization of company websites.
+- [ ] **Frontend Dashboard**: Build a React/Next.js interface for users.
+
+---
+
 ## Tech Stack
 
 ### Frontend
@@ -120,3 +133,52 @@ It does not scrape private platforms (e.g., LinkedIn) and is intended for educat
 ## License
 
 MIT License
+
+---
+
+## Deployment
+
+Outpost infrastructure is defined as code using **AWS CDK**.
+
+### Prerequisites
+
+- [AWS CLI](https://aws.amazon.com/cli/) installed and configured
+- Node.js installed
+
+### Setup
+
+1. **Install dependencies**:
+
+   ```bash
+   npm install
+   ```
+
+2. **Bootstrap CDK** (First time only):
+
+   ```bash
+   cd infra
+   npx cdk bootstrap
+   ```
+
+3. **Deploy Stack**:
+
+   ```bash
+   npx cdk deploy
+   ```
+
+   This command will compile the infrastructure and provision:
+   - **DynamoDB Tables** (Runs, Leads) with Streams enabled.
+   - **Lambda Functions** (CreateRun, ProcessRun) with scoped IAM permissions.
+   - **API Gateway** for the public API.
+
+### Verification
+
+After deployment, CDK will output the `ApiEndpoint`. You can test the end-to-end pipeline:
+
+```bash
+curl -X POST <API_ENDPOINT>/runs \
+  -H "Content-Type: application/json" \
+  -d '{"query": "San Francisco Coffee"}'
+```
+
+Check the `RunsTable` in DynamoDB to see the run status update to `COMPLETED` and leads populated in `LeadsTable`.
