@@ -5,6 +5,7 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 
 export class OutpostStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -18,6 +19,7 @@ export class OutpostStack extends cdk.Stack {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      stream: dynamodb.StreamViewType.NEW_IMAGE,
     });
 
     const leadsTable = new dynamodb.Table(this, 'LeadsTable', {
@@ -41,6 +43,25 @@ export class OutpostStack extends cdk.Stack {
     });
 
     runsTable.grantWriteData(createRunFunction);
+
+    const processRunFunction = new NodejsFunction(this, 'ProcessRunFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(__dirname, '../../backend/src/handlers/processRun.ts'),
+      handler: 'handler',
+      environment: {
+        RUNS_TABLE_NAME: runsTable.tableName,
+        LEADS_TABLE_NAME: leadsTable.tableName,
+      },
+    });
+
+    runsTable.grantReadWriteData(processRunFunction);
+    leadsTable.grantWriteData(processRunFunction);
+
+    processRunFunction.addEventSource(
+      new DynamoEventSource(runsTable, {
+        startingPosition: lambda.StartingPosition.LATEST,
+      }),
+    );
 
     // -------------------------------------------------------
     // API Gateway
