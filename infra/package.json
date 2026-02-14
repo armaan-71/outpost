@@ -12,11 +12,11 @@
     "lint": "eslint ."
   },
   "devDependencies": {
-    "esbuild": "^0.21.3",
     "@eslint/js": "^9.39.2",
     "@types/jest": "^30",
     "@types/node": "^24.10.1",
     "aws-cdk": "2.1105.0",
+    "esbuild": "^0.21.3",
     "eslint": "^9.39.2",
     "globals": "^17.3.0",
     "jest": "^30",

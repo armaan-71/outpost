@@ -1,8 +1,9 @@
-import * as cdk from 'aws-cdk-lib/core';
+import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam'; // Added
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
@@ -18,13 +19,12 @@ export class OutpostStack extends cdk.Stack {
     const runsTable = new dynamodb.Table(this, 'RunsTable', {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      stream: dynamodb.StreamViewType.NEW_IMAGE, // Enable Stream for Lambda Trigger
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      stream: dynamodb.StreamViewType.NEW_IMAGE,
     });
 
     const leadsTable = new dynamodb.Table(this, 'LeadsTable', {
-      partitionKey: { name: 'runId', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'domain', type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -33,8 +33,8 @@ export class OutpostStack extends cdk.Stack {
     // Lambda Functions
     // -------------------------------------------------------
 
-    const createRunFunction = new NodejsFunction(this, 'CreateRunFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+    const createRunFunction = new nodejs.NodejsFunction(this, 'CreateRunFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
       entry: path.join(__dirname, '../../backend/src/handlers/createRun.ts'),
       handler: 'handler',
       environment: {
@@ -44,18 +44,30 @@ export class OutpostStack extends cdk.Stack {
 
     runsTable.grantWriteData(createRunFunction);
 
-    const processRunFunction = new NodejsFunction(this, 'ProcessRunFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+    const processRunFunction = new nodejs.NodejsFunction(this, 'ProcessRunFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
       entry: path.join(__dirname, '../../backend/src/handlers/processRun.ts'),
       handler: 'handler',
       environment: {
         RUNS_TABLE_NAME: runsTable.tableName,
         LEADS_TABLE_NAME: leadsTable.tableName,
+        SERPAPI_KEY_PARAM_NAME: '/outpost/prod/serpapi_key',
       },
+      timeout: cdk.Duration.seconds(60), // Search might take a few seconds
     });
 
     runsTable.grantReadWriteData(processRunFunction);
     leadsTable.grantWriteData(processRunFunction);
+
+    // Allow Lambda to read from SSM Parameter Store
+    processRunFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['ssm:GetParameter'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/outpost/prod/serpapi_key`,
+        ],
+      }),
+    );
 
     processRunFunction.addEventSource(
       new DynamoEventSource(runsTable, {
