@@ -1,13 +1,35 @@
 import { DynamoDBStreamEvent } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, BatchWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
+const ssmClient = new SSMClient({});
 
 const RUNS_TABLE = process.env.RUNS_TABLE_NAME!;
 const LEADS_TABLE = process.env.LEADS_TABLE_NAME!;
-const SERP_API_KEY = process.env.SERPAPI_KEY!;
+const SERP_API_KEY_PARAM_NAME = process.env.SERPAPI_KEY_PARAM_NAME!;
+
+let cachedSerpApiKey: string | null = null;
+
+async function getSerpApiKey(): Promise<string> {
+  if (cachedSerpApiKey) return cachedSerpApiKey;
+
+  console.log(`Fetching secret from SSM: ${SERP_API_KEY_PARAM_NAME}`);
+  const command = new GetParameterCommand({
+    Name: SERP_API_KEY_PARAM_NAME,
+    WithDecryption: true,
+  });
+
+  const response = await ssmClient.send(command);
+  if (!response.Parameter || !response.Parameter.Value) {
+    throw new Error('Secret not found in SSM');
+  }
+
+  cachedSerpApiKey = response.Parameter.Value;
+  return cachedSerpApiKey;
+}
 
 interface Lead {
   id: string; // Unique ID for the lead (e.g., RunId#Timestamp#Index)
@@ -41,35 +63,49 @@ export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
     console.log(`Processing Run: ${runId} | Query: "${query}"`);
 
     try {
-      // 1. Check for API Key
-      if (!SERP_API_KEY) {
-        throw new Error('SERPAPI_KEY is missing in environment variables');
-      }
+      // 1. Get API Key (Securely)
+      const apiKey = await getSerpApiKey();
 
       // 2. Call SerpApi
-      const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&api_key=${SERP_API_KEY}&num=10`;
-      console.log(`Fetching SerpApi: ${url.replace(SERP_API_KEY, '***')}`);
+      const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&api_key=${apiKey}&num=10`;
+      console.log(`Fetching SerpApi: ${url.replace(apiKey, '***')}`);
 
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`SerpApi failed with status ${response.status}: ${response.statusText}`);
       }
 
-      const data = (await response.json()) as { organic_results?: SerpResult[] };
-      const results: SerpResult[] = data.organic_results || [];
-      console.log(`Found ${results.length} organic results`);
+      const data = await response.json(); // Use unknown for safety
+
+      // Validation
+      if (!data || typeof data !== 'object' || !('organic_results' in data)) {
+        console.error('Invalid SerpApi response:', JSON.stringify(data));
+        throw new Error('SerpApi response missing organic_results');
+      }
+
+      const results = (data as { organic_results: SerpResult[] }).organic_results || [];
+      console.log(`Found ${results.length} organic_results`);
 
       // 3. Map to Leads
-      const leads: Lead[] = results.map((r, i) => ({
-        id: `${runId}#${Date.now()}#${i}`,
-        runId,
-        companyName: r.title,
-        domain: r.link,
-        description: r.snippet,
-        status: 'NEW',
-        source: 'google-serp',
-        createdAt: new Date().toISOString(),
-      }));
+      const leads: Lead[] = results.map((r, i) => {
+        let domain = r.link;
+        try {
+          domain = new URL(r.link).hostname;
+        } catch {
+          console.warn(`Failed to parse domain from link: ${r.link}`);
+        }
+
+        return {
+          id: `${runId}#${Date.now()}#${i}`,
+          runId,
+          companyName: r.title,
+          domain,
+          description: r.snippet,
+          status: 'NEW',
+          source: 'google-serp',
+          createdAt: new Date().toISOString(),
+        };
+      });
 
       // 4. Save Leads (BatchWrite limit is 25 items)
       if (leads.length > 0) {

@@ -3,13 +3,10 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam'; // Added
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
-import * as dotenv from 'dotenv';
-
-// Load environment variables from root .env
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 export class OutpostStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -54,13 +51,23 @@ export class OutpostStack extends cdk.Stack {
       environment: {
         RUNS_TABLE_NAME: runsTable.tableName,
         LEADS_TABLE_NAME: leadsTable.tableName,
-        SERPAPI_KEY: process.env.SERPAPI_KEY || '',
+        SERPAPI_KEY_PARAM_NAME: '/outpost/prod/serpapi_key',
       },
       timeout: cdk.Duration.seconds(60), // Search might take a few seconds
     });
 
     runsTable.grantReadWriteData(processRunFunction);
     leadsTable.grantWriteData(processRunFunction);
+
+    // Allow Lambda to read from SSM Parameter Store
+    processRunFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['ssm:GetParameter'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/outpost/prod/serpapi_key`,
+        ],
+      }),
+    );
 
     processRunFunction.addEventSource(
       new DynamoEventSource(runsTable, {
