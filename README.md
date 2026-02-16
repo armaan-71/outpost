@@ -56,8 +56,8 @@ Outpost is built as a cloud-native, event-driven system on AWS.
 - **API Gateway** – Entry point for client requests
 - **AWS Lambda** – Stateless processing (discovery, scraping, enrichment, generation)
 - **AWS Step Functions** – Workflow orchestration
-- **DynamoDB** – Persistent storage for runs and leads
-- **Amazon S3** – Storage for raw website data and exports
+- **DynamoDB** – Persistent storage (Runs, Leads)
+- **Amazon S3** – Data Lake for raw SerpApi JSON results
 - **LLM Provider (Bedrock / OpenAI)** – Summarization and email generation
 
 This architecture enables:
@@ -75,7 +75,8 @@ This architecture enables:
 - [x] **Core Backend**: Serverless API for managing research runs.
 - [x] **Event-Driven Architecture**: Asynchronous processing pipeline using DynamoDB Streams.
 - [x] **Infrastructure as Code**: Fully automated deployment with AWS CDK.
-- [ ] **Real-Time Search**: Integrate SerpApi for live web search results.
+- [x] **Real-Time Search**: Integrate SerpApi for live web search results.
+- [x] **Data Lake**: Store raw search data in S3 for AI analysis.
 - [ ] **AI Analysis**: Implement LLM-based summarization of company websites.
 - [ ] **Frontend Dashboard**: Build a React/Next.js interface for users.
 
@@ -160,7 +161,17 @@ Outpost infrastructure is defined as code using **AWS CDK**.
    npx cdk bootstrap
    ```
 
-3. **Deploy Stack**:
+3. **Configure Secrets (SSM)**:
+   Store your SerpApi key in AWS Systems Manager Parameter Store:
+
+   ```bash
+   aws ssm put-parameter \
+     --name "/outpost/prod/serpapi_key" \
+     --value "YOUR_SERPAPI_KEY" \
+     --type "SecureString"
+   ```
+
+4. **Deploy Stack**:
 
    ```bash
    npx cdk deploy
@@ -181,4 +192,7 @@ curl -X POST <API_ENDPOINT>/runs \
   -d '{"query": "San Francisco Coffee"}'
 ```
 
-Check the `RunsTable` in DynamoDB to see the run status update to `COMPLETED` and leads populated in `LeadsTable`.
+Check:
+
+1. **DynamoDB**: `RunsTable` (Status: COMPLETED), `LeadsTable` (Extracted leads).
+2. **S3**: `RawDataBucket` contains the full JSON response from SerpApi.
