@@ -2,14 +2,19 @@ import { DynamoDBStreamEvent } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, BatchWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
+
 const ssmClient = new SSMClient({});
+const s3Client = new S3Client({});
 
 const RUNS_TABLE = process.env.RUNS_TABLE_NAME!;
 const LEADS_TABLE = process.env.LEADS_TABLE_NAME!;
+
 const SERP_API_KEY_PARAM_NAME = process.env.SERPAPI_KEY_PARAM_NAME!;
+const RAW_DATA_BUCKET = process.env.RAW_DATA_BUCKET_NAME!;
 
 let cachedSerpApiKey: string | null = null;
 
@@ -76,6 +81,25 @@ export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
       }
 
       const data = await response.json(); // Use unknown for safety
+
+      // 2.5 Save Raw Data to S3 (Partitioned by Date)
+      if (RAW_DATA_BUCKET) {
+        try {
+          const date = new Date().toISOString().split('T')[0].replace(/-/g, '/'); // YYYY/MM/DD
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: RAW_DATA_BUCKET,
+              Key: `runs/${date}/${runId}.json`,
+              Body: JSON.stringify(data, null, 2),
+              ContentType: 'application/json',
+            }),
+          );
+          console.log(`Saved raw data to s3://${RAW_DATA_BUCKET}/runs/${date}/${runId}.json`);
+        } catch (s3Error) {
+          console.error('Failed to save raw data to S3:', s3Error);
+          // Don't fail the whole run if S3 fails, just log it.
+        }
+      }
 
       // Validation
       if (!data || typeof data !== 'object' || !('organic_results' in data)) {

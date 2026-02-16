@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.987.0",
+    "@aws-sdk/client-s3": "^3.990.0",
     "@aws-sdk/client-ssm": "^3.990.0",
     "@aws-sdk/lib-dynamodb": "^3.987.0"
   }
