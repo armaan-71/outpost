@@ -31,8 +31,10 @@ export class OutpostStack extends cdk.Stack {
     });
 
     const rawDataBucket = new s3.Bucket(this, 'RawDataBucket', {
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true, // For dev convenience
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // KEEP DESTROY FOR DEV/PROTOTYPING (Change to RETAIN for Prod)
+      autoDeleteObjects: true, // Wipe bucket on stack deletion (Dev only)
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
     // -------------------------------------------------------
