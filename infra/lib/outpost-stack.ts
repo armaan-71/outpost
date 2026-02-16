@@ -3,7 +3,8 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as iam from 'aws-cdk-lib/aws-iam'; // Added
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3'; // Added
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
@@ -29,6 +30,11 @@ export class OutpostStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    const rawDataBucket = new s3.Bucket(this, 'RawDataBucket', {
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true, // For dev convenience
+    });
+
     // -------------------------------------------------------
     // Lambda Functions
     // -------------------------------------------------------
@@ -52,12 +58,14 @@ export class OutpostStack extends cdk.Stack {
         RUNS_TABLE_NAME: runsTable.tableName,
         LEADS_TABLE_NAME: leadsTable.tableName,
         SERPAPI_KEY_PARAM_NAME: '/outpost/prod/serpapi_key',
+        RAW_DATA_BUCKET_NAME: rawDataBucket.bucketName,
       },
       timeout: cdk.Duration.seconds(60), // Search might take a few seconds
     });
 
     runsTable.grantReadWriteData(processRunFunction);
     leadsTable.grantWriteData(processRunFunction);
+    rawDataBucket.grantPut(processRunFunction);
 
     // Allow Lambda to read from SSM Parameter Store
     processRunFunction.addToRolePolicy(
