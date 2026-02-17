@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
+import { createApiResponse } from '../utils/apiResponse';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -18,15 +19,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const body = JSON.parse(event.body || '{}') as RunRequestBody;
 
     if (!body.query) {
-      return {
-        statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Missing required field: query' }),
-      };
+      return createApiResponse(400, { error: 'Missing required field: query' });
     }
 
     const run = {
       id: randomUUID(),
+      entityType: 'RUN', // For GSI Query
       query: body.query,
       location: body.location || null,
       status: 'PENDING',
@@ -40,23 +38,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }),
     );
 
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        message: 'Run created successfully',
-        runId: run.id,
-      }),
-    };
+    return createApiResponse(201, {
+      message: 'Run created successfully',
+      runId: run.id,
+    });
   } catch (error) {
     console.error('Error creating run:', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Internal server error' }),
-    };
+    return createApiResponse(500, { error: 'Internal server error' });
   }
 };

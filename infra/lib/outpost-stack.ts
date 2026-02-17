@@ -25,6 +25,14 @@ export class OutpostStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Add GSI for efficient sorting by date (Refactor: PR Feedback)
+    runsTable.addGlobalSecondaryIndex({
+      indexName: 'byEntityTypeAndCreatedAt',
+      partitionKey: { name: 'entityType', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
     const leadsTable = new dynamodb.Table(this, 'LeadsTable', {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -64,6 +72,7 @@ export class OutpostStack extends cdk.Stack {
       handler: 'handler',
       environment: {
         RUNS_TABLE_NAME: runsTable.tableName,
+        RUNS_GS1_NAME: 'byEntityTypeAndCreatedAt', // Pass GSI name
       },
     });
 
@@ -82,6 +91,7 @@ export class OutpostStack extends cdk.Stack {
       handler: 'handler',
       environment: {
         LEADS_TABLE_NAME: leadsTable.tableName,
+        LEADS_GSI_NAME: 'runId-index', // Pass GSI name
       },
     });
 
