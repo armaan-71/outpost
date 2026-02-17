@@ -5,7 +5,7 @@ import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3'; // Added
-import * as ssm from 'aws-cdk-lib/aws-ssm'; // Added
+
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';

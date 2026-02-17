@@ -202,7 +202,7 @@ Return JSON only. No markdown. No conversational text.
               jsonStr = jsonMatch[0];
             }
 
-            const result = JSON.parse(jsonStr);
+            const result = JSON.parse(jsonStr) as { summary: string; email_draft: string };
 
             lead.summary = result.summary;
             lead.email_draft = result.email_draft;
