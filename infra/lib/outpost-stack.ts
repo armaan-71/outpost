@@ -62,6 +62,7 @@ export class OutpostStack extends cdk.Stack {
         LEADS_TABLE_NAME: leadsTable.tableName,
         SERPAPI_KEY_PARAM_NAME: '/outpost/prod/serpapi_key',
         GROQ_API_KEY_PARAM_NAME: '/outpost/prod/groq_api_key',
+        GROQ_REQUEST_DELAY_MS: '2000',
         RAW_DATA_BUCKET_NAME: rawDataBucket.bucketName,
       },
       timeout: cdk.Duration.seconds(180), // AI processing takes time
