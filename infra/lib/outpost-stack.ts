@@ -31,6 +31,13 @@ export class OutpostStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Add GSI for querying leads by runId
+    leadsTable.addGlobalSecondaryIndex({
+      indexName: 'runId-index',
+      partitionKey: { name: 'runId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
     const rawDataBucket = new s3.Bucket(this, 'RawDataBucket', {
       removalPolicy: cdk.RemovalPolicy.DESTROY, // KEEP DESTROY FOR DEV/PROTOTYPING (Change to RETAIN for Prod)
       autoDeleteObjects: true, // Wipe bucket on stack deletion (Dev only)
@@ -51,7 +58,37 @@ export class OutpostStack extends cdk.Stack {
       },
     });
 
+    const getRunsFunction = new nodejs.NodejsFunction(this, 'GetRunsFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      entry: path.join(__dirname, '../../backend/src/handlers/getRuns.ts'),
+      handler: 'handler',
+      environment: {
+        RUNS_TABLE_NAME: runsTable.tableName,
+      },
+    });
+
+    const getRunFunction = new nodejs.NodejsFunction(this, 'GetRunFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      entry: path.join(__dirname, '../../backend/src/handlers/getRun.ts'),
+      handler: 'handler',
+      environment: {
+        RUNS_TABLE_NAME: runsTable.tableName,
+      },
+    });
+
+    const getLeadsFunction = new nodejs.NodejsFunction(this, 'GetLeadsFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      entry: path.join(__dirname, '../../backend/src/handlers/getLeads.ts'),
+      handler: 'handler',
+      environment: {
+        LEADS_TABLE_NAME: leadsTable.tableName,
+      },
+    });
+
     runsTable.grantWriteData(createRunFunction);
+    runsTable.grantReadData(getRunsFunction);
+    runsTable.grantReadData(getRunFunction);
+    leadsTable.grantReadData(getLeadsFunction);
 
     const processRunFunction = new nodejs.NodejsFunction(this, 'ProcessRunFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -105,6 +142,13 @@ export class OutpostStack extends cdk.Stack {
 
     const runsResource = api.root.addResource('runs');
     runsResource.addMethod('POST', new apigateway.LambdaIntegration(createRunFunction));
+    runsResource.addMethod('GET', new apigateway.LambdaIntegration(getRunsFunction));
+
+    const runResource = runsResource.addResource('{id}');
+    runResource.addMethod('GET', new apigateway.LambdaIntegration(getRunFunction));
+
+    const leadsResource = runResource.addResource('leads');
+    leadsResource.addMethod('GET', new apigateway.LambdaIntegration(getLeadsFunction));
 
     // -------------------------------------------------------
     // Outputs
