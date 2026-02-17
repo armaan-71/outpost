@@ -58,7 +58,7 @@ Outpost is built as a cloud-native, event-driven system on AWS.
 - **AWS Step Functions** – Workflow orchestration
 - **DynamoDB** – Persistent storage (Runs, Leads)
 - **Amazon S3** – Data Lake for raw SerpApi JSON results
-- **LLM Provider (Bedrock / OpenAI)** – Summarization and email generation
+- **AI Provider** – **Groq** (Llama 3.3 70B) for high-speed, cost-effective inference
 
 This architecture enables:
 
@@ -77,7 +77,7 @@ This architecture enables:
 - [x] **Infrastructure as Code**: Fully automated deployment with AWS CDK.
 - [x] **Real-Time Search**: Integrate SerpApi for live web search results.
 - [x] **Data Lake**: Store raw search data in S3 for AI analysis.
-- [ ] **AI Analysis**: Implement LLM-based summarization of company websites.
+- [x] **AI Analysis**: Integrated **Groq (Llama 3.3)** for intelligent company summarization and email drafting.
 - [ ] **Frontend Dashboard**: Build a React/Next.js interface for users.
 
 ---
@@ -101,7 +101,8 @@ This architecture enables:
 
 ### AI
 
-- LLM integration (TBD)
+- **Groq** (Llama 3.3 70B)
+- OpenAI-compatible SDK
 
 ### Infrastructure
 
@@ -168,6 +169,11 @@ Outpost infrastructure is defined as code using **AWS CDK**.
    aws ssm put-parameter \
      --name "/outpost/prod/serpapi_key" \
      --value "YOUR_SERPAPI_KEY" \
+     --type "SecureString"
+
+   aws ssm put-parameter \
+     --name "/outpost/prod/groq_api_key" \
+     --value "YOUR_GROQ_API_KEY" \
      --type "SecureString"
    ```
 

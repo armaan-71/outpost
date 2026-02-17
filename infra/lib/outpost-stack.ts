@@ -5,6 +5,7 @@ import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3'; // Added
+
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
@@ -60,9 +61,11 @@ export class OutpostStack extends cdk.Stack {
         RUNS_TABLE_NAME: runsTable.tableName,
         LEADS_TABLE_NAME: leadsTable.tableName,
         SERPAPI_KEY_PARAM_NAME: '/outpost/prod/serpapi_key',
+        GROQ_API_KEY_PARAM_NAME: '/outpost/prod/groq_api_key',
+        GROQ_REQUEST_DELAY_MS: '2000',
         RAW_DATA_BUCKET_NAME: rawDataBucket.bucketName,
       },
-      timeout: cdk.Duration.seconds(60), // Search might take a few seconds
+      timeout: cdk.Duration.seconds(180), // AI processing takes time
     });
 
     runsTable.grantReadWriteData(processRunFunction);
@@ -70,11 +73,14 @@ export class OutpostStack extends cdk.Stack {
     rawDataBucket.grantPut(processRunFunction);
 
     // Allow Lambda to read from SSM Parameter Store
+    // Grant permission to read the SerpApi and OpenRouter keys from Parameter Store
+    // Note: We use a manual policy statement because fromStringParameterName doesn't support SecureString well in CFN templates
     processRunFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['ssm:GetParameter'],
         resources: [
           `arn:aws:ssm:${this.region}:${this.account}:parameter/outpost/prod/serpapi_key`,
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/outpost/prod/groq_api_key`,
         ],
       }),
     );
