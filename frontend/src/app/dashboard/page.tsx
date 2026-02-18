@@ -4,28 +4,35 @@ import { api, Run } from '@/lib/api';
 import { RunCard } from '@/components/RunCard';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
+import { CreateRunDialog } from '@/components/CreateRunDialog';
+import { cn } from '@/lib/utils';
 
 export default function Home() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadRuns = async () => {
-      try {
-        const data = await api.getRuns();
-        setRuns(data);
-      } catch (err) {
-        console.error('Failed to fetch runs:', err);
-        setError('Failed to load runs. Please check your API configuration.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadRuns = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getRuns();
+      setRuns(data);
+    } catch (err) {
+      console.error('Failed to fetch runs:', err);
+      setError('Failed to load runs. Please check your API configuration.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadRuns();
   }, []);
+
+  const handleRunCreated = () => {
+    loadRuns();
+  };
 
   return (
     <main className="container mx-auto py-10 px-4">
@@ -36,9 +43,18 @@ export default function Home() {
             Manage your lead research campaigns and view results.
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" /> New Run
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={loadRuns}
+            disabled={loading}
+            title="Refresh runs"
+          >
+            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          </Button>
+          <CreateRunDialog onRunCreated={handleRunCreated} />
+        </div>
       </div>
 
       {loading ? (
@@ -53,7 +69,7 @@ export default function Home() {
           <p className="text-muted-foreground mt-2 mb-6">
             Get started by creating your first research run.
           </p>
-          <Button variant="outline">Create Run</Button>
+          <CreateRunDialog onRunCreated={handleRunCreated} />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
