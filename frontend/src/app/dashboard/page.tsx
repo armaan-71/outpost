@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, RefreshCw } from 'lucide-react';
 import { CreateRunDialog } from '@/components/CreateRunDialog';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/logger';
 
 export default function Home() {
   const [runs, setRuns] = useState<Run[]>([]);
@@ -19,7 +20,7 @@ export default function Home() {
       const data = await api.getRuns();
       setRuns(data);
     } catch (err) {
-      console.error('Failed to fetch runs:', err);
+      logger.error('Failed to fetch runs', err);
       setError('Failed to load runs. Please check your API configuration.');
     } finally {
       setLoading(false);

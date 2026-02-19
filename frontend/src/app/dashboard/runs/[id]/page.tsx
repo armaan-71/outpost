@@ -26,6 +26,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getStatusColor } from '@/lib/utils';
 import { Sparkles } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 export default function RunDetailsPage() {
   const params = useParams();
@@ -45,7 +46,7 @@ export default function RunDetailsPage() {
       setRun(runData);
       setLeads(leadsData);
     } catch (err) {
-      console.error('Failed to fetch run details:', err);
+      logger.error('Failed to fetch run details', err);
       setError('Failed to load run details.');
     } finally {
       setLoading(false);
