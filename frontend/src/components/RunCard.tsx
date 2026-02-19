@@ -14,22 +14,15 @@ import { Run } from '@/lib/api';
 import Link from 'next/link';
 import { useMemo } from 'react';
 
+import { getStatusColor } from '@/lib/utils';
+
 interface RunCardProps {
   run: Run;
 }
 
 export function RunCard({ run }: RunCardProps) {
   const statusColor = useMemo(() => {
-    switch (run.status) {
-      case 'COMPLETED':
-        return 'bg-green-500 hover:bg-green-600';
-      case 'FAILED':
-        return 'bg-red-500 hover:bg-red-600';
-      case 'PROCESSING':
-        return 'bg-blue-500 hover:bg-blue-600';
-      default:
-        return 'bg-gray-500 hover:bg-gray-600';
-    }
+    return getStatusColor(run.status);
   }, [run.status]);
 
   return (
@@ -55,7 +48,7 @@ export function RunCard({ run }: RunCardProps) {
       </CardContent>
       <CardFooter>
         <Button asChild variant="outline" className="w-full">
-          <Link href={`/runs/${run.id}`}>View Details</Link>
+          <Link href={`/dashboard/runs/${run.id}`}>View Details</Link>
         </Button>
       </CardFooter>
     </Card>

@@ -65,7 +65,8 @@ export const api = {
   },
 
   getRun: async (id: string): Promise<Run> => {
-    return fetchJson<Run>(`/runs/${id}`);
+    const data = await fetchJson<{ run: Run }>(`/runs/${id}`);
+    return data.run;
   },
 
   getLeads: async (runId: string): Promise<Lead[]> => {
