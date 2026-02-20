@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/armaan-71/outpost/backend/go/internal/api"
 	"github.com/armaan-71/outpost/backend/go/internal/db"
+	models "github.com/armaan-71/outpost/backend/go/internal/types"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,25 +17,11 @@ import (
 	"github.com/google/uuid"
 )
 
-type RunRequestBody struct {
-	Query    string `json:"query"`
-	Location string `json:"location,omitempty"`
-}
-
-type RunItem struct {
-	ID         string `dynamodbav:"id"`
-	EntityType string `dynamodbav:"entityType"`
-	Query      string `dynamodbav:"query"`
-	Location   string `dynamodbav:"location,omitempty"`
-	Status     string `dynamodbav:"status"`
-	CreatedAt  string `dynamodbav:"createdAt"`
-}
-
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	var body RunRequestBody
+	var body models.RunRequestBody
 	err := json.Unmarshal([]byte(request.Body), &body)
 	if err != nil {
-		fmt.Printf("Error unmarshalling body: %v\n", err)
+		slog.Error("Error unmarshalling body", "error", err)
 		return api.CreateResponse(400, map[string]string{"error": "Invalid JSON body"})
 	}
 
@@ -45,18 +32,18 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	now := time.Now().UTC().Format(time.RFC3339)
 	runId := uuid.New().String()
 
-	item := RunItem{
+	item := models.RunItem{
 		ID:         runId,
-		EntityType: "RUN",
+		EntityType: models.EntityTypeRun,
 		Query:      body.Query,
 		Location:   body.Location,
-		Status:     "PENDING",
+		Status:     models.StatusPending,
 		CreatedAt:  now,
 	}
 
 	av, err := attributevalue.MarshalMap(item)
 	if err != nil {
-		fmt.Printf("Got error marshalling new item: %v\n", err)
+		slog.Error("Got error marshalling new item", "error", err)
 		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
 	}
 
@@ -66,7 +53,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	})
 
 	if err != nil {
-		fmt.Printf("Got error calling PutItem: %v\n", err)
+		slog.Error("Got error calling PutItem", "error", err)
 		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
 	}
 

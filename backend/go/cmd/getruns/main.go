@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/armaan-71/outpost/backend/go/internal/api"
 	"github.com/armaan-71/outpost/backend/go/internal/db"
+	models "github.com/armaan-71/outpost/backend/go/internal/types"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -24,25 +25,25 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		IndexName:              aws.String(GsiName),
 		KeyConditionExpression: aws.String("entityType = :entityType"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":entityType": &types.AttributeValueMemberS{Value: "RUN"},
+			":entityType": &types.AttributeValueMemberS{Value: models.EntityTypeRun},
 		},
 		ScanIndexForward: aws.Bool(false),
 	})
 
 	if err != nil {
-		fmt.Printf("Got error calling Query: %v\n", err)
+		slog.Error("Got error calling Query", "error", err)
 		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
 	}
 
-	var runs []map[string]interface{}
+	var runs []models.RunItem
 	err = attributevalue.UnmarshalListOfMaps(out.Items, &runs)
 	if err != nil {
-		fmt.Printf("Failed to unmarshal response items: %v\n", err)
+		slog.Error("Failed to unmarshal response items", "error", err)
 		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
 	}
 
 	if runs == nil {
-		runs = make([]map[string]interface{}, 0)
+		runs = make([]models.RunItem, 0)
 	}
 
 	return api.CreateResponse(200, map[string]interface{}{

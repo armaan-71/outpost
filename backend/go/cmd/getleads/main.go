@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/armaan-71/outpost/backend/go/internal/api"
 	"github.com/armaan-71/outpost/backend/go/internal/db"
+	models "github.com/armaan-71/outpost/backend/go/internal/types"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -33,19 +34,19 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	})
 
 	if err != nil {
-		fmt.Printf("Got error calling Query: %v\n", err)
+		slog.Error("Got error calling Query", "error", err)
 		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
 	}
 
-	var leads []map[string]interface{}
+	var leads []models.LeadItem
 	err = attributevalue.UnmarshalListOfMaps(out.Items, &leads)
 	if err != nil {
-		fmt.Printf("Failed to unmarshal response items: %v\n", err)
+		slog.Error("Failed to unmarshal response items", "error", err)
 		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
 	}
 
 	if leads == nil {
-		leads = make([]map[string]interface{}, 0)
+		leads = make([]models.LeadItem, 0)
 	}
 
 	return api.CreateResponse(200, map[string]interface{}{

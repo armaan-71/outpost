@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -19,8 +19,7 @@ func init() {
 	// Initialize the DynamoDB client once during container startup (Cold Start)
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		fmt.Printf("unable to load SDK config, %v\n", err)
-		return
+		log.Fatalf("unable to load SDK config, %v", err)
 	}
 	Client = dynamodb.NewFromConfig(cfg)
 }

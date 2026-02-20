@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os"
+	"log/slog"
 
 	"github.com/armaan-71/outpost/backend/go/internal/api"
 	"github.com/armaan-71/outpost/backend/go/internal/db"
+	models "github.com/armaan-71/outpost/backend/go/internal/types"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -14,8 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
-
-var GsiName = os.Getenv("RUNS_GSI_NAME")
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	runId := request.PathParameters["id"]
@@ -31,7 +29,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	})
 
 	if err != nil {
-		fmt.Printf("Got error calling GetItem: %v\n", err)
+		slog.Error("Got error calling GetItem", "error", err)
 		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
 	}
 
@@ -39,10 +37,10 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return api.CreateResponse(404, map[string]string{"error": "Run not found"})
 	}
 
-	var run map[string]interface{}
+	var run models.RunItem
 	err = attributevalue.UnmarshalMap(out.Item, &run)
 	if err != nil {
-		fmt.Printf("Failed to unmarshal response item: %v\n", err)
+		slog.Error("Failed to unmarshal response item", "error", err)
 		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
 	}
 

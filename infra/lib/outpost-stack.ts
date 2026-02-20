@@ -63,7 +63,8 @@ export class OutpostStack extends cdk.Stack {
         architecture: lambda.Architecture.ARM_64, // Matches your Mac for easier local building
         handler: 'bootstrap', // AL2023 requires the executable to be named 'bootstrap'
         code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/go'), {
-          assetHash: cmdDir, // Force CDK to build each binary separately
+          assetHash:
+            cdk.FileSystem.fingerprint(path.join(__dirname, '../../backend/go')) + '-' + cmdDir, // Force CDK to rebuild when Go code changes
           bundling: {
             image: lambda.Runtime.PROVIDED_AL2023.bundlingImage,
             local: {
