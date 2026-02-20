@@ -14,7 +14,7 @@ func init() {
 	if allowedOrigin == "" {
 		allowedOrigin = "*"
 	}
-	
+
 	defaultHeaders = map[string]string{
 		"Content-Type":                 "application/json",
 		"Access-Control-Allow-Origin":  allowedOrigin,

@@ -20,15 +20,25 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             frontend/package-lock.json
-            backend/package-lock.json
             infra/package-lock.json
 
       # Install dependencies for all packages
       - name: Install root deps
         run: npm ci
 
-      - name: Install backend deps
-        run: cd backend && npm ci
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.21.0'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'backend/python/requirements.txt'
+
+      - name: Install Python deps
+        run: cd backend/python && uv venv && uv pip install -r requirements.txt
 
       - name: Install frontend deps
         run: cd frontend && npm ci
@@ -42,9 +52,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
-
-      - name: Typecheck backend
-        run: npm run typecheck:backend
 
       - name: Synth CDK
         run: npm run synth
