@@ -8,6 +8,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3'; // Added
 
 import { Construct } from 'constructs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 
 export class OutpostStack extends cdk.Stack {
@@ -100,10 +101,32 @@ export class OutpostStack extends cdk.Stack {
     runsTable.grantReadData(getRunFunction);
     leadsTable.grantReadData(getLeadsFunction);
 
-    const processRunFunction = new nodejs.NodejsFunction(this, 'ProcessRunFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../../backend/src/handlers/processRun.ts'),
-      handler: 'handler',
+    const processRunFunction = new lambda.Function(this, 'ProcessRunFunction', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'process_run.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/python/src/handlers'), {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_12.bundlingImage,
+          local: {
+            tryBundle(outputDir: string) {
+              try {
+                // Install dependencies into the output directory
+                execSync(
+                  `pip3 install -r ${path.join(__dirname, '../../backend/python/requirements.txt')} -t ${outputDir}`,
+                );
+                // Copy the handler code into the output directory
+                execSync(
+                  `cp -R ${path.join(__dirname, '../../backend/python/src/handlers/process_run.py')} ${outputDir}`,
+                );
+                return true;
+              } catch (e) {
+                console.warn('Local Python bundling failed:', e);
+                return false;
+              }
+            },
+          },
+        },
+      }),
       environment: {
         RUNS_TABLE_NAME: runsTable.tableName,
         LEADS_TABLE_NAME: leadsTable.tableName,
