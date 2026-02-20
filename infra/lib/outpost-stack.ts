@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3'; // Added
@@ -58,42 +57,51 @@ export class OutpostStack extends cdk.Stack {
     // Lambda Functions
     // -------------------------------------------------------
 
-    const createRunFunction = new nodejs.NodejsFunction(this, 'CreateRunFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../../backend/src/handlers/createRun.ts'),
-      handler: 'handler',
-      environment: {
-        RUNS_TABLE_NAME: runsTable.tableName,
-      },
+    const buildGoLambda = (id: string, cmdDir: string, environment: { [key: string]: string }) => {
+      return new lambda.Function(this, id, {
+        runtime: lambda.Runtime.PROVIDED_AL2023, // Recommended for Go
+        architecture: lambda.Architecture.ARM_64, // Matches your Mac for easier local building
+        handler: 'bootstrap', // AL2023 requires the executable to be named 'bootstrap'
+        code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/go'), {
+          assetHash: cmdDir, // Force CDK to build each binary separately
+          bundling: {
+            image: lambda.Runtime.PROVIDED_AL2023.bundlingImage,
+            local: {
+              tryBundle(outputDir: string) {
+                try {
+                  // Compile the Go binary directly into the output directory as 'bootstrap'
+                  execSync(
+                    `cd ${path.join(__dirname, '../../backend/go')} && GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o ${path.join(outputDir, 'bootstrap')} ./cmd/${cmdDir}/main.go`,
+                  );
+                  return true;
+                } catch (e) {
+                  console.warn(`Local Go bundling failed for ${id}:`, e);
+                  return false;
+                }
+              },
+            },
+          },
+        }),
+        environment,
+      });
+    };
+
+    const createRunFunction = buildGoLambda('CreateRunFunction', 'createrun', {
+      RUNS_TABLE_NAME: runsTable.tableName,
     });
 
-    const getRunsFunction = new nodejs.NodejsFunction(this, 'GetRunsFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../../backend/src/handlers/getRuns.ts'),
-      handler: 'handler',
-      environment: {
-        RUNS_TABLE_NAME: runsTable.tableName,
-        RUNS_GS1_NAME: 'byEntityTypeAndCreatedAt', // Pass GSI name
-      },
+    const getRunsFunction = buildGoLambda('GetRunsFunction', 'getruns', {
+      RUNS_TABLE_NAME: runsTable.tableName,
+      RUNS_GSI_NAME: 'byEntityTypeAndCreatedAt',
     });
 
-    const getRunFunction = new nodejs.NodejsFunction(this, 'GetRunFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../../backend/src/handlers/getRun.ts'),
-      handler: 'handler',
-      environment: {
-        RUNS_TABLE_NAME: runsTable.tableName,
-      },
+    const getRunFunction = buildGoLambda('GetRunFunction', 'getrun', {
+      RUNS_TABLE_NAME: runsTable.tableName,
     });
 
-    const getLeadsFunction = new nodejs.NodejsFunction(this, 'GetLeadsFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../../backend/src/handlers/getLeads.ts'),
-      handler: 'handler',
-      environment: {
-        LEADS_TABLE_NAME: leadsTable.tableName,
-        LEADS_GSI_NAME: 'runId-index', // Pass GSI name
-      },
+    const getLeadsFunction = buildGoLambda('GetLeadsFunction', 'getleads', {
+      LEADS_TABLE_NAME: leadsTable.tableName,
+      LEADS_GSI_NAME: 'runId-index',
     });
 
     runsTable.grantWriteData(createRunFunction);
