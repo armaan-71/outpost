@@ -1,0 +1,12 @@
+node_modules/
+.venv/
+venv/
+cdk.out/
+.next/
+out/
+dist/
+__pycache__/
+.idea/
+.vscode/
+*.swp
+*.swo

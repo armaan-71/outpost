@@ -54,7 +54,8 @@ Outpost is built as a cloud-native, event-driven system on AWS.
 ### Core Components
 
 - **API Gateway** – Entry point for client requests
-- **AWS Lambda** – Stateless processing (discovery, scraping, enrichment, generation)
+- **AWS Lambda (Go)** – High-performance, low-latency CRUD API operations (`createRun`, `getRuns`, etc.)
+- **AWS Lambda (Python)** – Data-processing pipeline for discovery, scraping, enrichment, and LLM generation
 - **AWS Step Functions** – Workflow orchestration
 - **DynamoDB** – Persistent storage (Runs, Leads)
 - **Amazon S3** – Data Lake for raw SerpApi JSON results
@@ -72,13 +73,13 @@ This architecture enables:
 
 ## Roadmap
 
-- [x] **Core Backend**: Serverless API for managing research runs.
+- [x] **Backend Migration**: API rewritten in Go for speed, processing pipeline rewritten in Python for data/AI ecosystem compatibility.
 - [x] **Event-Driven Architecture**: Asynchronous processing pipeline using DynamoDB Streams.
 - [x] **Infrastructure as Code**: Fully automated deployment with AWS CDK.
 - [x] **Real-Time Search**: Integrate SerpApi for live web search results.
 - [x] **Data Lake**: Store raw search data in S3 for AI analysis.
 - [x] **AI Analysis**: Integrated **Groq (Llama 3.3)** for intelligent company summarization and email drafting.
-- [ ] **Frontend Dashboard**: Build a React/Next.js interface for users.
+- [x] **Frontend Dashboard**: Build a React/Next.js interface for users.
 
 ---
 
@@ -90,6 +91,8 @@ This architecture enables:
 
 ### Backend
 
+- **Go (Golang)** – High-speed CRUD REST API functions
+- **Python** – Heavy-duty data processing and LLM inference functions
 - AWS Lambda
 - API Gateway
 - Step Functions

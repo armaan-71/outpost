@@ -4,11 +4,10 @@
   "description": "AI-powered lead research and outreach tool",
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
-    "typecheck:backend": "cd backend && npx tsc --noEmit",
     "synth": "cd infra && npx cdk synth",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint": "cd frontend && npm run lint && cd ../backend && npm run lint && cd ../infra && npm run lint"
+    "format": "prettier --write . && cd backend/python && uv tool run black . && cd ../go && go fmt ./...",
+    "format:check": "prettier --check . && cd backend/python && uv tool run black --check .",
+    "lint": "cd frontend && npm run lint && cd ../infra && npm run lint && cd ../backend/python && uv tool run flake8 . && cd ../go && go vet ./..."
   },
   "devDependencies": {
     "prettier": "^3.2.0"
