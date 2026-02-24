@@ -24,14 +24,9 @@ func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 		return api.CreateResponse(400, map[string]string{"error": "Missing run ID"})
 	}
 
-	// Extract the User ID injected by API Gateway's Clerk Authorizer
-	var userID string
-	if claims, ok := request.RequestContext.Authorizer.JWT.Claims["sub"]; ok {
-		userID = claims
-	} else {
-		// Fallback for local testing or unauthenticated routes if misconfigured
-		slog.Warn("No sub claim found in authorizer context. Was JWT passed?")
-		userID = "anonymous"
+	userID, err := api.GetUserID(request)
+	if err != nil {
+		return api.CreateResponse(401, map[string]string{"error": "Unauthorized"})
 	}
 
 	// Step 1: Verify the user owns the Run before fetching the leads
@@ -56,7 +51,7 @@ func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 	}
 
 	// Compare User ID unless testing anonymously
-	if run.UserID != userID && userID != "anonymous" {
+	if run.UserID != userID {
 		slog.Warn("Unauthorized access attempt to leads", "runId", runId, "requestedBy", userID)
 		return api.CreateResponse(403, map[string]string{"error": "Forbidden"})
 	}

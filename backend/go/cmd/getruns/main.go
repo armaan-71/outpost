@@ -19,25 +19,18 @@ import (
 var GsiName = os.Getenv("RUNS_GSI_NAME")
 
 func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
-	// Extract the User ID injected by API Gateway's Clerk Authorizer
-	var userID string
-	if claims, ok := request.RequestContext.Authorizer.JWT.Claims["sub"]; ok {
-		userID = claims
-	} else {
-		// Fallback for local testing or unauthenticated routes if misconfigured
-		slog.Warn("No sub claim found in authorizer context. Was JWT passed?")
-		userID = "anonymous"
+	userID, err := api.GetUserID(request)
+	if err != nil {
+		return api.CreateResponse(401, map[string]string{"error": "Unauthorized"})
 	}
 
-	// Query the GSI for all RUNs, sorted by createdAt desc
+	// Query the optimized GSI directly for all RUNs owned by this UserID, sorted by createdAt desc
 	out, err := db.Client.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(db.RunsTableName),
 		IndexName:              aws.String(GsiName),
-		KeyConditionExpression: aws.String("entityType = :entityType"),
-		FilterExpression:       aws.String("userId = :userId"), // Isolate by UserID
+		KeyConditionExpression: aws.String("userId = :userId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":entityType": &types.AttributeValueMemberS{Value: models.EntityTypeRun},
-			":userId":     &types.AttributeValueMemberS{Value: userID},
+			":userId": &types.AttributeValueMemberS{Value: userID},
 		},
 		ScanIndexForward: aws.Bool(false),
 	})

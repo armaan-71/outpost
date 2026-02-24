@@ -11,6 +11,10 @@ import { Construct } from 'constructs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from the frontend app for CDK deploy-time configuration
+dotenv.config({ path: path.join(__dirname, '../../frontend/.env.local') });
 
 export class OutpostStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -27,10 +31,10 @@ export class OutpostStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Add GSI for efficient sorting by date (Refactor: PR Feedback)
+    // Add GSI for efficient querying of runs by user and sorting by date (Refactor: PR Feedback)
     runsTable.addGlobalSecondaryIndex({
-      indexName: 'byEntityTypeAndCreatedAt',
-      partitionKey: { name: 'entityType', type: dynamodb.AttributeType.STRING },
+      indexName: 'byUserIdAndCreatedAt',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL,
     });
@@ -95,7 +99,7 @@ export class OutpostStack extends cdk.Stack {
 
     const getRunsFunction = buildGoLambda('GetRunsFunction', 'getruns', {
       RUNS_TABLE_NAME: runsTable.tableName,
-      RUNS_GSI_NAME: 'byEntityTypeAndCreatedAt',
+      RUNS_GSI_NAME: 'byUserIdAndCreatedAt',
     });
 
     const getRunFunction = buildGoLambda('GetRunFunction', 'getrun', {
@@ -191,10 +195,12 @@ export class OutpostStack extends cdk.Stack {
       },
     });
 
-    // Note: In production, you would fetch this from SSM. Hardcoding for development.
+    // Note: In production, you would fetch this from SSM.
     // The issuer must exactly match your Clerk Frontend API URL.
-    const issuerUrl =
-      process.env.CLERK_ISSUER_URL || 'https://faithful-earwig-76.clerk.accounts.dev';
+    const issuerUrl = process.env.CLERK_ISSUER_URL;
+    if (!issuerUrl) {
+      throw new Error('CLERK_ISSUER_URL environment variable is not set. Cannot synthesize stack.');
+    }
 
     const clerkAuthorizer = new HttpJwtAuthorizer('ClerkAuthorizer', issuerUrl, {
       // By default, Clerk sets the audience to your frontend URL or a specific string.
