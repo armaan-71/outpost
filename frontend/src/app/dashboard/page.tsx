@@ -8,7 +8,7 @@ import { Plus, RefreshCw } from 'lucide-react';
 import { CreateRunDialog } from '@/components/CreateRunDialog';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
-import { UserButton, useAuth } from '@clerk/nextjs';
+import { useAuth } from '@clerk/nextjs';
 
 export default function Home() {
   const [runs, setRuns] = useState<Run[]>([]);
