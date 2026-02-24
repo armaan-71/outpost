@@ -1,14 +1,20 @@
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as apigwv2 from '@aws-cdk/aws-apigatewayv2-alpha';
+import { HttpJwtAuthorizer } from '@aws-cdk/aws-apigatewayv2-authorizers-alpha';
+import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3'; // Added
+import * as s3 from 'aws-cdk-lib/aws-s3';
 
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from the frontend app for CDK deploy-time configuration
+dotenv.config({ path: path.join(__dirname, '../../frontend/.env.local') });
 
 export class OutpostStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -25,10 +31,10 @@ export class OutpostStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Add GSI for efficient sorting by date (Refactor: PR Feedback)
+    // Add GSI for efficient querying of runs by user and sorting by date (Refactor: PR Feedback)
     runsTable.addGlobalSecondaryIndex({
-      indexName: 'byEntityTypeAndCreatedAt',
-      partitionKey: { name: 'entityType', type: dynamodb.AttributeType.STRING },
+      indexName: 'byUserIdAndCreatedAt',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL,
     });
@@ -93,7 +99,7 @@ export class OutpostStack extends cdk.Stack {
 
     const getRunsFunction = buildGoLambda('GetRunsFunction', 'getruns', {
       RUNS_TABLE_NAME: runsTable.tableName,
-      RUNS_GSI_NAME: 'byEntityTypeAndCreatedAt',
+      RUNS_GSI_NAME: 'byUserIdAndCreatedAt',
     });
 
     const getRunFunction = buildGoLambda('GetRunFunction', 'getrun', {
@@ -103,11 +109,13 @@ export class OutpostStack extends cdk.Stack {
     const getLeadsFunction = buildGoLambda('GetLeadsFunction', 'getleads', {
       LEADS_TABLE_NAME: leadsTable.tableName,
       LEADS_GSI_NAME: 'runId-index',
+      RUNS_TABLE_NAME: runsTable.tableName,
     });
 
     runsTable.grantWriteData(createRunFunction);
     runsTable.grantReadData(getRunsFunction);
     runsTable.grantReadData(getRunFunction);
+    runsTable.grantReadData(getLeadsFunction);
     leadsTable.grantReadData(getLeadsFunction);
 
     const processRunFunction = new lambda.Function(this, 'ProcessRunFunction', {
@@ -171,33 +179,68 @@ export class OutpostStack extends cdk.Stack {
     );
 
     // -------------------------------------------------------
-    // API Gateway
+    // API Gateway (HTTP API v2)
     // -------------------------------------------------------
 
-    const api = new apigateway.RestApi(this, 'OutpostApi', {
-      restApiName: 'Outpost API',
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
+    const api = new apigwv2.HttpApi(this, 'OutpostHttpApi', {
+      apiName: 'Outpost API',
+      corsPreflight: {
+        allowHeaders: ['Content-Type', 'Authorization'],
+        allowMethods: [
+          apigwv2.CorsHttpMethod.GET,
+          apigwv2.CorsHttpMethod.POST,
+          apigwv2.CorsHttpMethod.OPTIONS,
+        ],
+        allowOrigins: ['*'],
       },
     });
 
-    const runsResource = api.root.addResource('runs');
-    runsResource.addMethod('POST', new apigateway.LambdaIntegration(createRunFunction));
-    runsResource.addMethod('GET', new apigateway.LambdaIntegration(getRunsFunction));
+    // Note: In production, you would fetch this from SSM.
+    // The issuer must exactly match your Clerk Frontend API URL.
+    const issuerUrl = process.env.CLERK_ISSUER_URL;
+    if (!issuerUrl) {
+      throw new Error('CLERK_ISSUER_URL environment variable is not set. Cannot synthesize stack.');
+    }
 
-    const runResource = runsResource.addResource('{id}');
-    runResource.addMethod('GET', new apigateway.LambdaIntegration(getRunFunction));
+    const clerkAuthorizer = new HttpJwtAuthorizer('ClerkAuthorizer', issuerUrl, {
+      // By default, Clerk sets the audience to your frontend URL or a specific string.
+      jwtAudience: [process.env.CLERK_JWT_AUDIENCE || 'outpost-api'],
+    });
 
-    const leadsResource = runResource.addResource('leads');
-    leadsResource.addMethod('GET', new apigateway.LambdaIntegration(getLeadsFunction));
+    api.addRoutes({
+      path: '/runs',
+      methods: [apigwv2.HttpMethod.POST],
+      integration: new HttpLambdaIntegration('CreateRunIntegration', createRunFunction),
+      authorizer: clerkAuthorizer,
+    });
+
+    api.addRoutes({
+      path: '/runs',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration('GetRunsIntegration', getRunsFunction),
+      authorizer: clerkAuthorizer,
+    });
+
+    api.addRoutes({
+      path: '/runs/{id}',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration('GetRunIntegration', getRunFunction),
+      authorizer: clerkAuthorizer,
+    });
+
+    api.addRoutes({
+      path: '/runs/{id}/leads',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration('GetLeadsIntegration', getLeadsFunction),
+      authorizer: clerkAuthorizer,
+    });
 
     // -------------------------------------------------------
     // Outputs
     // -------------------------------------------------------
 
     new cdk.CfnOutput(this, 'ApiEndpoint', {
-      value: api.url,
+      value: api.url!,
       description: 'Outpost API endpoint URL',
     });
   }

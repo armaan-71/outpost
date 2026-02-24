@@ -18,14 +18,19 @@ import (
 
 var GsiName = os.Getenv("RUNS_GSI_NAME")
 
-func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	// Query the GSI for all RUNs, sorted by createdAt desc
+func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
+	userID, err := api.GetUserID(request)
+	if err != nil {
+		return api.CreateResponse(401, map[string]string{"error": "Unauthorized"})
+	}
+
+	// Query the optimized GSI directly for all RUNs owned by this UserID, sorted by createdAt desc
 	out, err := db.Client.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(db.RunsTableName),
 		IndexName:              aws.String(GsiName),
-		KeyConditionExpression: aws.String("entityType = :entityType"),
+		KeyConditionExpression: aws.String("userId = :userId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":entityType": &types.AttributeValueMemberS{Value: models.EntityTypeRun},
+			":userId": &types.AttributeValueMemberS{Value: userID},
 		},
 		ScanIndexForward: aws.Bool(false),
 	})

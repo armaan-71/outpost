@@ -38,17 +38,27 @@ class ApiError extends Error {
   }
 }
 
-async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
+async function fetchJson<T>(
+  endpoint: string,
+  token: string | null,
+  options?: RequestInit,
+): Promise<T> {
   if (!API_URL) {
     throw new Error('NEXT_PUBLIC_API_URL is not set');
   }
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_URL}${endpoint}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {
@@ -59,25 +69,25 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
 }
 
 export const api = {
-  getRuns: async (): Promise<Run[]> => {
-    const data = await fetchJson<{ runs: Run[] }>('/runs');
+  getRuns: async (token: string | null): Promise<Run[]> => {
+    const data = await fetchJson<{ runs: Run[] }>('/runs', token);
     return data.runs;
   },
 
-  createRun: async (query: string): Promise<Run> => {
-    return fetchJson<Run>('/runs', {
+  createRun: async (query: string, token: string | null): Promise<Run> => {
+    return fetchJson<Run>('/runs', token, {
       method: 'POST',
       body: JSON.stringify({ query }),
     });
   },
 
-  getRun: async (id: string): Promise<Run> => {
-    const data = await fetchJson<{ run: Run }>(`/runs/${id}`);
+  getRun: async (id: string, token: string | null): Promise<Run> => {
+    const data = await fetchJson<{ run: Run }>(`/runs/${id}`, token);
     return data.run;
   },
 
-  getLeads: async (runId: string): Promise<Lead[]> => {
-    const data = await fetchJson<{ leads: Lead[] }>(`/runs/${runId}/leads`);
+  getLeads: async (runId: string, token: string | null): Promise<Lead[]> => {
+    const data = await fetchJson<{ leads: Lead[] }>(`/runs/${runId}/leads`, token);
     return data.leads;
   },
 };
