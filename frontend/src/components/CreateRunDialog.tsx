@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 
 interface CreateRunDialogProps {
   onRunCreated?: () => void;
@@ -26,6 +27,7 @@ export function CreateRunDialog({ onRunCreated }: CreateRunDialogProps) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { getToken } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +35,8 @@ export function CreateRunDialog({ onRunCreated }: CreateRunDialogProps) {
 
     setLoading(true);
     try {
-      await api.createRun(query);
+      const token = await getToken();
+      await api.createRun(query, token);
       setOpen(false);
       setQuery('');
       if (onRunCreated) {

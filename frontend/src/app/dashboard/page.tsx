@@ -2,22 +2,25 @@
 
 import { api, Run } from '@/lib/api';
 import { RunCard } from '@/components/RunCard';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, RefreshCw } from 'lucide-react';
 import { CreateRunDialog } from '@/components/CreateRunDialog';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
+import { UserButton, useAuth } from '@clerk/nextjs';
 
 export default function Home() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { getToken } = useAuth();
 
-  const loadRuns = async () => {
+  const loadRuns = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getRuns();
+      const token = await getToken();
+      const data = await api.getRuns(token);
       setRuns(data);
     } catch (err) {
       logger.error('Failed to fetch runs', err);
@@ -25,11 +28,11 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getToken]);
 
   useEffect(() => {
     loadRuns();
-  }, []);
+  }, [loadRuns]);
 
   const handleRunCreated = () => {
     loadRuns();

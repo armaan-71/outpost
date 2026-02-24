@@ -18,11 +18,50 @@ import (
 
 var GsiName = os.Getenv("LEADS_GSI_NAME")
 
-func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
 	runId := request.PathParameters["id"]
 	if runId == "" {
 		return api.CreateResponse(400, map[string]string{"error": "Missing run ID"})
 	}
+
+	// Extract the User ID injected by API Gateway's Clerk Authorizer
+	var userID string
+	if claims, ok := request.RequestContext.Authorizer.JWT.Claims["sub"]; ok {
+		userID = claims
+	} else {
+		// Fallback for local testing or unauthenticated routes if misconfigured
+		slog.Warn("No sub claim found in authorizer context. Was JWT passed?")
+		userID = "anonymous"
+	}
+
+	// Step 1: Verify the user owns the Run before fetching the leads
+	runOut, err := db.Client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(db.RunsTableName),
+		Key: map[string]types.AttributeValue{
+			"id": &types.AttributeValueMemberS{Value: runId},
+		},
+	})
+	if err != nil {
+		slog.Error("Got error calling GetItem for run verification", "error", err)
+		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
+	}
+	if runOut.Item == nil {
+		return api.CreateResponse(404, map[string]string{"error": "Run not found"})
+	}
+
+	var run models.RunItem
+	if err := attributevalue.UnmarshalMap(runOut.Item, &run); err != nil {
+		slog.Error("Failed to unmarshal run item", "error", err)
+		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
+	}
+
+	// Compare User ID unless testing anonymously
+	if run.UserID != userID && userID != "anonymous" {
+		slog.Warn("Unauthorized access attempt to leads", "runId", runId, "requestedBy", userID)
+		return api.CreateResponse(403, map[string]string{"error": "Forbidden"})
+	}
+
+	// Step 2: Fetch the leads now that ownership is verified
 
 	out, err := db.Client.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(db.LeadsTableName),

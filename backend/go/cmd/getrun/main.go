@@ -15,10 +15,20 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
 	runId := request.PathParameters["id"]
 	if runId == "" {
 		return api.CreateResponse(400, map[string]string{"error": "Missing run ID"})
+	}
+
+	// Extract the User ID injected by API Gateway's Clerk Authorizer
+	var userID string
+	if claims, ok := request.RequestContext.Authorizer.JWT.Claims["sub"]; ok {
+		userID = claims
+	} else {
+		// Fallback for local testing or unauthenticated routes if misconfigured
+		slog.Warn("No sub claim found in authorizer context. Was JWT passed?")
+		userID = "anonymous"
 	}
 
 	out, err := db.Client.GetItem(ctx, &dynamodb.GetItemInput{
@@ -42,6 +52,11 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	if err != nil {
 		slog.Error("Failed to unmarshal response item", "error", err)
 		return api.CreateResponse(500, map[string]string{"error": "Internal server error"})
+	}
+
+	if run.UserID != userID && userID != "anonymous" {
+		slog.Warn("Unauthorized access attempt", "runId", runId, "requestedBy", userID, "ownerId", run.UserID)
+		return api.CreateResponse(403, map[string]string{"error": "Forbidden"})
 	}
 
 	return api.CreateResponse(200, map[string]interface{}{

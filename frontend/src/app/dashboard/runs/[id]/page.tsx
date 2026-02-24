@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RefreshCw, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
+import { UserButton, useAuth } from '@clerk/nextjs';
 import {
   Table,
   TableBody,
@@ -37,12 +38,17 @@ export default function RunDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const { getToken } = useAuth();
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [runData, leadsData] = await Promise.all([api.getRun(id), api.getLeads(id)]);
+      const token = await getToken();
+      const [runData, leadsData] = await Promise.all([
+        api.getRun(id, token),
+        api.getLeads(id, token),
+      ]);
       setRun(runData);
       setLeads(leadsData);
     } catch (err) {
@@ -51,7 +57,7 @@ export default function RunDetailsPage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, getToken]);
 
   useEffect(() => {
     if (id) {
@@ -82,7 +88,7 @@ export default function RunDetailsPage() {
   return (
     <TooltipProvider>
       <main className="container mx-auto py-10 px-4">
-        <div className="mb-8">
+        <div className="mb-8 flex justify-between items-start">
           <Button
             asChild
             variant="ghost"
@@ -92,7 +98,10 @@ export default function RunDetailsPage() {
               <ArrowLeft className="h-4 w-4" /> Back to Dashboard
             </Link>
           </Button>
+          <UserButton afterSignOutUrl="/" />
+        </div>
 
+        <div className="mb-8">
           <div className="flex justify-between items-start">
             <div>
               <div className="flex items-center gap-4 mb-2">

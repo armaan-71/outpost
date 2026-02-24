@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
 	var body models.RunRequestBody
 	err := json.Unmarshal([]byte(request.Body), &body)
 	if err != nil {
@@ -29,11 +29,22 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return api.CreateResponse(400, map[string]string{"error": "Missing required field: query"})
 	}
 
+	// Extract the User ID injected by API Gateway's Clerk Authorizer
+	var userID string
+	if claims, ok := request.RequestContext.Authorizer.JWT.Claims["sub"]; ok {
+		userID = claims
+	} else {
+		// Fallback for local testing or unauthenticated routes if misconfigured
+		slog.Warn("No sub claim found in authorizer context. Was JWT passed?")
+		userID = "anonymous"
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	runId := uuid.New().String()
 
 	item := models.RunItem{
 		ID:         runId,
+		UserID:     userID, // Save the user context
 		EntityType: models.EntityTypeRun,
 		Query:      body.Query,
 		Location:   body.Location,

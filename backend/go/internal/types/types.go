@@ -12,6 +12,7 @@ type RunRequestBody struct {
 
 type RunItem struct {
 	ID         string `dynamodbav:"id" json:"id"`
+	UserID     string `dynamodbav:"userId" json:"userId"` // Added for Auth
 	EntityType string `dynamodbav:"entityType" json:"entityType"`
 	Query      string `dynamodbav:"query" json:"query"`
 	Location   string `dynamodbav:"location,omitempty" json:"location,omitempty"`
