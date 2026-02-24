@@ -54,10 +54,14 @@ jobs:
         run: npm run lint
 
       - name: Synth CDK
-        run: npm run synth
+        run: cd infra && npx cdk synth
+        env:
+          CLERK_ISSUER_URL: https://dummy.clerk.accounts.dev
 
       - name: Build frontend
         run: cd frontend && npm run build
         env:
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_this_is_a_dummy_key_for_ci_builds
+          # Note: Clerk SDK strictly validates that this key is base64-encoded and matches their regex format, specifically requiring a valid `.clerk.accounts.dev` domain suffix.
+          # This is completely FAKE and safe to commit. It translates to: `fake-key-for-ci-builds.clerk.accounts.dev$`
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZmFrZS1rZXktZm9yLWNpLWJ1aWxkcy5jbGVyay5hY2NvdW50cy5kZXYk
           NEXT_PUBLIC_API_URL: https://api.dummy.com
