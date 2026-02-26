@@ -119,16 +119,15 @@ def filter_results(results: list, query: str, groq_api_key: str) -> list:
     print(f"Filtering {len(results)} results using LLM...")
 
     # Prepare a condensed list of results for the LLM to save tokens
-    condensed_results = []
-    for i, r in enumerate(results):
-        condensed_results.append(
-            {
-                "index": i,
-                "title": r.get("title", ""),
-                "snippet": r.get("snippet", r.get("description", "")),
-                "domain": parse_domain(r.get("link", r.get("website", ""))),
-            }
-        )
+    condensed_results = [
+        {
+            "index": i,
+            "title": r.get("title", ""),
+            "snippet": r.get("snippet", r.get("description", "")),
+            "domain": parse_domain(r.get("link", r.get("website", ""))),
+        }
+        for i, r in enumerate(results)
+    ]
 
     prompt = f"""
 The user is looking for companies matching: {json.dumps(query)}
