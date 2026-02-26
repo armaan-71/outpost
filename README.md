@@ -156,6 +156,7 @@ Outpost infrastructure is defined as code using **AWS CDK**.
 
 - [AWS CLI](https://aws.amazon.com/cli/) installed and configured
 - Node.js installed
+- [Docker](https://www.docker.com/products/docker-desktop/) running in the background (Required by AWS CDK to cross-compile Python C-extensions like `lxml` for the AWS Linux environment)
 
 ### Setup
 
