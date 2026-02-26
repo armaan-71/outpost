@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import time
@@ -20,6 +21,9 @@ LEADS_TABLE_NAME = os.environ.get("LEADS_TABLE_NAME")
 SERPAPI_KEY_PARAM_NAME = os.environ.get("SERPAPI_KEY_PARAM_NAME")
 GROQ_API_KEY_PARAM_NAME = os.environ.get("GROQ_API_KEY_PARAM_NAME")
 RAW_DATA_BUCKET = os.environ.get("RAW_DATA_BUCKET_NAME")
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 RUNS_TABLE = dynamodb.Table(RUNS_TABLE_NAME) if RUNS_TABLE_NAME else None
 LEADS_TABLE = dynamodb.Table(LEADS_TABLE_NAME) if LEADS_TABLE_NAME else None
@@ -122,7 +126,12 @@ def scrape_website(url: str) -> str:
     if not url.startswith("http"):
         url = "https://" + url
 
-    print(f"Scraping website: {url}")
+    # Basic SSRF protection: block AWS metadata service and localhost
+    if "169.254.169.254" in url or "127.0.0.1" in url or "localhost" in url:
+        logger.warning(f"Blocked scraping attempt to internal/sensitive URL: {url}")
+        return ""
+
+    logger.info(f"Scraping website: {url}")
     try:
         # 10 second timeout for fetching
         downloaded = trafilatura.fetch_url(url)
@@ -135,7 +144,7 @@ def scrape_website(url: str) -> str:
         )
         return text if text else ""
     except Exception as e:
-        print(f"Failed to scrape {url}: {str(e)}")
+        logger.error(f"Failed to scrape {url}: {str(e)}")
         return ""
 
 
