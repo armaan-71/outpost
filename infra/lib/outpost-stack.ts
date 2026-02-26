@@ -120,28 +120,16 @@ export class OutpostStack extends cdk.Stack {
 
     const processRunFunction = new lambda.Function(this, 'ProcessRunFunction', {
       runtime: lambda.Runtime.PYTHON_3_12,
+      architecture: lambda.Architecture.ARM_64,
       handler: 'process_run.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/python/src/handlers'), {
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/python'), {
         bundling: {
           image: lambda.Runtime.PYTHON_3_12.bundlingImage,
-          local: {
-            tryBundle(outputDir: string) {
-              try {
-                // Install dependencies into the output directory
-                execSync(
-                  `pip3 install -r ${path.join(__dirname, '../../backend/python/requirements.txt')} -t ${outputDir}`,
-                );
-                // Copy the handler code into the output directory
-                execSync(
-                  `cp -R ${path.join(__dirname, '../../backend/python/src/handlers/process_run.py')} ${outputDir}`,
-                );
-                return true;
-              } catch (e) {
-                console.warn('Local Python bundling failed:', e);
-                return false;
-              }
-            },
-          },
+          command: [
+            'bash',
+            '-c',
+            'pip install -r requirements.txt -t /asset-output --platform manylinux2014_aarch64 --only-binary=:all: && cp -R src/handlers/* /asset-output/',
+          ],
         },
       }),
       environment: {
