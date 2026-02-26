@@ -23,6 +23,10 @@ RAW_DATA_BUCKET = os.environ.get("RAW_DATA_BUCKET_NAME")
 RUNS_TABLE = dynamodb.Table(RUNS_TABLE_NAME) if RUNS_TABLE_NAME else None
 LEADS_TABLE = dynamodb.Table(LEADS_TABLE_NAME) if LEADS_TABLE_NAME else None
 
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_REWRITE_MODEL = "llama-3.3-70b-versatile"
+GROQ_EMAIL_PROMPT_MODEL = "llama-3.3-70b-versatile"
+
 # Cache for API keys to avoid unnecessary SSM calls within the same execution environment
 cached_serp_api_key = None
 cached_groq_api_key = None
@@ -65,7 +69,7 @@ def parse_domain(link: str) -> str:
 def rewrite_query(query: str, groq_api_key: str) -> Dict[str, Any]:
     print("Rewriting query...")
     prompt = f"""
-The user wants to find companies matching this description: "{query}"
+The user wants to find companies matching this description: {json.dumps(query)}
 
 Task:
 1. Classify the intent: is this a local/physical business (e.g. restaurants, agencies, plumbers)
@@ -88,22 +92,23 @@ Return JSON exactly as follows:
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "llama-3.3-70b-versatile",
+        "model": GROQ_REWRITE_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 500,
         "temperature": 0.3,
         "response_format": {"type": "json_object"},
     }
     response = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
+        GROQ_API_URL,
         headers=headers,
         json=payload,
         timeout=30,
     )
     response.raise_for_status()
-    content = (
-        response.json().get("choices", [{}])[0].get("message", {}).get("content", "{}")
-    )
+    choices = response.json().get("choices", [])
+    if not choices:
+        return {}
+    content = choices[0].get("message", {}).get("content", "{}")
     return json.loads(content)
 
 
@@ -150,12 +155,29 @@ def handler(event: Dict[str, Any], context: Any) -> None:
             for sq in search_queries:
                 try:
                     encoded_query = urllib.parse.quote(sq)
-                    url = f"https://serpapi.com/search.json?engine={engine}&q={encoded_query}&api_key={api_key}&num=10"
+                    encoded_engine = urllib.parse.quote(engine)
+                    url = f"https://serpapi.com/search.json?engine={encoded_engine}&q={encoded_query}&api_key={api_key}&num=10"
                     print(f"Fetching SerpApi for '{sq}' with {engine}...")
 
                     response = requests.get(url, timeout=30)
                     response.raise_for_status()
                     data = response.json()
+
+                    # Save Raw Data to S3
+                    if RAW_DATA_BUCKET:
+                        try:
+                            date_str = datetime.now().strftime("%Y/%m/%d")
+                            # Use a unique name for each query's results
+                            s3_key = f"runs/{date_str}/{run_id}-{urllib.parse.quote_plus(sq)}.json"
+                            s3_client.put_object(
+                                Bucket=RAW_DATA_BUCKET,
+                                Key=s3_key,
+                                Body=json.dumps(data, indent=2),
+                                ContentType="application/json",
+                            )
+                            print(f"Saved raw data to s3://{RAW_DATA_BUCKET}/{s3_key}")
+                        except Exception as e:
+                            print(f"Failed to save raw data to S3: {str(e)}")
 
                     if engine == "google":
                         results = data.get("organic_results", [])
@@ -238,7 +260,7 @@ Return JSON only. No markdown. No conversational text.
                         }
 
                         payload = {
-                            "model": "llama-3.3-70b-versatile",
+                            "model": GROQ_EMAIL_PROMPT_MODEL,
                             "messages": [{"role": "user", "content": prompt}],
                             "max_tokens": 500,
                             "temperature": 0.7,
@@ -246,19 +268,20 @@ Return JSON only. No markdown. No conversational text.
                         }
 
                         completion_response = requests.post(
-                            "https://api.groq.com/openai/v1/chat/completions",
+                            GROQ_API_URL,
                             headers=headers,
                             json=payload,
                             timeout=60,
                         )
                         completion_response.raise_for_status()
 
-                        content = (
-                            completion_response.json()
-                            .get("choices", [{}])[0]
-                            .get("message", {})
-                            .get("content", "{}")
-                        )
+                        choices = completion_response.json().get("choices", [])
+                        if not choices:
+                            print(
+                                f"AI Analysis failed: empty choices returned for {lead['companyName']}"
+                            )
+                            continue
+                        content = choices[0].get("message", {}).get("content", "{}")
                         result = json.loads(content)
 
                         lead["summary"] = result.get("summary", "")
