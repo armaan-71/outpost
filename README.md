@@ -39,9 +39,11 @@ Outpost is designed to be **general-purpose**, with flexible prompts that adapt 
 ## How It Works
 
 1. User submits a search query (industry, location, intent)
-2. A background workflow discovers relevant company websites
-3. Each website is fetched and analyzed
-4. AI models summarize the company and generate outreach copy
+2. A background workflow processes the query:
+   - **Smart Discovery**: An LLM rewrites the query and selects the best search engine (Google or Google Maps) based on intent.
+   - **Multi-query Execution**: Multiple optimized searches run concurrently to maximize relevant results while filtering out noise (like listicles).
+3. Each company website is fetched and analyzed
+4. AI models summarize the company and generate highly-personalized outreach copy
 5. Results are stored and presented in a simple web interface
 6. Users can view or export the generated leads and emails
 
@@ -53,13 +55,14 @@ Outpost is built as a cloud-native, event-driven system on AWS.
 
 ### Core Components
 
-- **API Gateway** – Entry point for client requests
+- **Auth** - Clerk for user authentication and API protection
+- **API Gateway** – Entry point for client requests, secured via Clerk JWT Authorizer
 - **AWS Lambda (Go)** – High-performance, low-latency CRUD API operations (`createRun`, `getRuns`, etc.)
-- **AWS Lambda (Python)** – Data-processing pipeline for discovery, scraping, enrichment, and LLM generation
+- **AWS Lambda (Python)** – Data-processing pipeline for smart discovery, scraping, enrichment, and LLM generation
 - **AWS Step Functions** – Workflow orchestration
 - **DynamoDB** – Persistent storage (Runs, Leads)
 - **Amazon S3** – Data Lake for raw SerpApi JSON results
-- **AI Provider** – **Groq** (Llama 3.3 70B) for high-speed, cost-effective inference
+- **AI Provider** – **Groq** (Llama 3.3 70B) for high-speed query analysis, summarization, and email drafting
 
 This architecture enables:
 
@@ -79,7 +82,9 @@ This architecture enables:
 - [x] **Real-Time Search**: Integrate SerpApi for live web search results.
 - [x] **Data Lake**: Store raw search data in S3 for AI analysis.
 - [x] **AI Analysis**: Integrated **Groq (Llama 3.3)** for intelligent company summarization and email drafting.
+- [x] **Smart Discovery Pipeline**: LLM-powered query rewriting and dynamic search engine selection (`google` vs `google_maps`) to drastically improve lead quality.
 - [x] **Frontend Dashboard**: Build a React/Next.js interface for users.
+- [x] **Authentication**: Integrated Clerk for user signup, login, and secure API access.
 
 ---
 
@@ -87,7 +92,9 @@ This architecture enables:
 
 ### Frontend
 
-- Next.js
+- Next.js (App Router)
+- Tailwind CSS
+- Clerk (Authentication)
 
 ### Backend
 
