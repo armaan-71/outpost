@@ -62,6 +62,51 @@ def parse_domain(link: str) -> str:
         return link
 
 
+def rewrite_query(query: str, groq_api_key: str) -> Dict[str, Any]:
+    print("Rewriting query...")
+    prompt = f"""
+The user wants to find companies matching this description: "{query}"
+
+Task:
+1. Classify the intent: is this a local/physical business (e.g. restaurants, agencies, plumbers)
+   or an online/tech company (e.g. startups, SaaS, ecommerce)?
+2. Choose the search engine: Use "google_maps" for local businesses and "google" for online/tech companies. If it could be both, use "google".
+3. Generate 3 Google search queries optimized to find actual company homepages.
+   - For "google_maps", keep it simple (e.g., "coffee shops in San Francisco").
+   - For "google", use operators like site: or negative keywords like -blog -"top 10"
+   to filter out listicles (e.g., "AI healthcare startup -blog -directory").
+
+Return JSON exactly as follows:
+{{
+  "intent": "local" | "tech",
+  "engine": "google" | "google_maps",
+  "queries": ["query 1", "query 2", "query 3"]
+}}
+"""
+    headers = {
+        "Authorization": f"Bearer {groq_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 500,
+        "temperature": 0.3,
+        "response_format": {"type": "json_object"},
+    }
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=30,
+    )
+    response.raise_for_status()
+    content = (
+        response.json().get("choices", [{}])[0].get("message", {}).get("content", "{}")
+    )
+    return json.loads(content)
+
+
 def handler(event: Dict[str, Any], context: Any) -> None:
     for record in event.get("Records", []):
         if record.get("eventName") != "INSERT":
@@ -85,48 +130,65 @@ def handler(event: Dict[str, Any], context: Any) -> None:
             api_key = get_serp_api_key()
 
             # 2. Call SerpApi
-            encoded_query = urllib.parse.quote(query)
-            url = f"https://serpapi.com/search.json?engine=google&q={encoded_query}&api_key={api_key}&num=10"
-            print("Fetching SerpApi...")  # Don't log API key
+            groq_api_key = get_groq_api_key()
 
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
-            data = response.json()
+            try:
+                rewritten = rewrite_query(query, groq_api_key)
+                search_queries = rewritten.get("queries", [query])
+                engine = rewritten.get("engine", "google")
+                print(f"Query Rewritten: Engine={engine}, Queries={search_queries}")
+            except Exception as rewrite_e:
+                print(
+                    f"Query rewrite failed: {str(rewrite_e)}. Falling back to original query."
+                )
+                search_queries = [query]
+                engine = "google"
 
-            # 2.5 Save Raw Data to S3
-            if RAW_DATA_BUCKET:
+            all_results = []
+            seen_domains = set()
+
+            for sq in search_queries:
                 try:
-                    date_str = datetime.now().strftime("%Y/%m/%d")
-                    s3_key = f"runs/{date_str}/{run_id}.json"
-                    s3_client.put_object(
-                        Bucket=RAW_DATA_BUCKET,
-                        Key=s3_key,
-                        Body=json.dumps(data, indent=2),
-                        ContentType="application/json",
-                    )
-                    print(f"Saved raw data to s3://{RAW_DATA_BUCKET}/{s3_key}")
-                except Exception as e:
-                    print(f"Failed to save raw data to S3: {str(e)}")
-                    # Continue even if S3 fails
+                    encoded_query = urllib.parse.quote(sq)
+                    url = f"https://serpapi.com/search.json?engine={engine}&q={encoded_query}&api_key={api_key}&num=10"
+                    print(f"Fetching SerpApi for '{sq}' with {engine}...")
 
-            # Validation
-            if not data or "organic_results" not in data:
-                print(f"Invalid SerpApi response: {json.dumps(data)}")
-                raise ValueError("SerpApi response missing organic_results")
+                    response = requests.get(url, timeout=30)
+                    response.raise_for_status()
+                    data = response.json()
 
-            results = data.get("organic_results", [])
-            print(f"Found {len(results)} organic_results")
+                    if engine == "google":
+                        results = data.get("organic_results", [])
+                    else:  # google_maps
+                        results = data.get("local_results", [])
+
+                    for r in results:
+                        link = r.get("link", r.get("website", ""))
+                        if not link:
+                            continue
+                        domain = parse_domain(link)
+                        # Basic domain deduplication
+                        if domain not in seen_domains:
+                            seen_domains.add(domain)
+                            all_results.append(r)
+
+                except Exception as serp_e:
+                    print(f"SerpApi fetch failed for '{sq}': {str(serp_e)}")
+
+            print(f"Found {len(all_results)} total unique results")
+            results = all_results
 
             # 3. Map to Leads
             leads = []
             for i, r in enumerate(results):
-                domain = parse_domain(r.get("link", ""))
+                link = r.get("link", r.get("website", ""))
+                domain = parse_domain(link)
                 lead = {
                     "id": f"{run_id}#{int(time.time() * 1000)}#{i}",
                     "runId": run_id,
                     "companyName": r.get("title", ""),
                     "domain": domain,
-                    "description": r.get("snippet", ""),
+                    "description": r.get("snippet", r.get("description", "")),
                     "status": "NEW",
                     "source": "google-serp",
                     "createdAt": datetime.now(timezone.utc).strftime(
@@ -137,7 +199,7 @@ def handler(event: Dict[str, Any], context: Any) -> None:
 
             # 3.5 AI Analysis (Groq Llama 3.3)
             try:
-                groq_api_key = get_groq_api_key()
+                # groq_api_key already fetched above
 
                 print("Starting AI Analysis for leads...")
                 for lead in leads:
