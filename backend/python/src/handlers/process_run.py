@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import time
@@ -6,6 +7,7 @@ from datetime import datetime, timezone
 
 import boto3
 import requests
+import trafilatura
 from typing import Dict, Any
 
 # Initialize AWS clients
@@ -19,6 +21,9 @@ LEADS_TABLE_NAME = os.environ.get("LEADS_TABLE_NAME")
 SERPAPI_KEY_PARAM_NAME = os.environ.get("SERPAPI_KEY_PARAM_NAME")
 GROQ_API_KEY_PARAM_NAME = os.environ.get("GROQ_API_KEY_PARAM_NAME")
 RAW_DATA_BUCKET = os.environ.get("RAW_DATA_BUCKET_NAME")
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 RUNS_TABLE = dynamodb.Table(RUNS_TABLE_NAME) if RUNS_TABLE_NAME else None
 LEADS_TABLE = dynamodb.Table(LEADS_TABLE_NAME) if LEADS_TABLE_NAME else None
@@ -110,6 +115,37 @@ Return JSON exactly as follows:
         return {}
     content = choices[0].get("message", {}).get("content", "{}")
     return json.loads(content)
+
+
+def scrape_website(url: str) -> str:
+    """Fetches the main text content of a URL."""
+    if not url:
+        return ""
+
+    # Ensure it has exactly http/https structure
+    if not url.startswith("http"):
+        url = "https://" + url
+
+    # Basic SSRF protection: block AWS metadata service and localhost
+    if "169.254.169.254" in url or "127.0.0.1" in url or "localhost" in url:
+        logger.warning(f"Blocked scraping attempt to internal/sensitive URL: {url}")
+        return ""
+
+    logger.info(f"Scraping website: {url}")
+    try:
+        # 10 second timeout for fetching
+        downloaded = trafilatura.fetch_url(url)
+        if downloaded is None:
+            return ""
+
+        # Extract the text
+        text = trafilatura.extract(
+            downloaded, include_links=False, include_images=False, include_tables=False
+        )
+        return text if text else ""
+    except Exception as e:
+        logger.error(f"Failed to scrape {url}: {str(e)}")
+        return ""
 
 
 def filter_results(results: list, query: str, groq_api_key: str) -> list:
@@ -279,17 +315,22 @@ def handler(event: Dict[str, Any], context: Any) -> None:
             # Filter results using LLM
             filtered_results = filter_results(all_results, query, groq_api_key)
 
-            # 3. Map to Leads
+            # 3. Map to Leads and Scrape Website Text
             leads = []
             for i, r in enumerate(filtered_results):
                 link = r.get("link", r.get("website", ""))
                 domain = parse_domain(link)
+
+                # Fetch text directly from the homepage
+                website_text = scrape_website(link)
+
                 lead = {
                     "id": f"{run_id}#{int(time.time() * 1000)}#{i}",
                     "runId": run_id,
                     "companyName": r.get("title", ""),
                     "domain": domain,
                     "description": r.get("snippet", r.get("description", "")),
+                    "websiteText": website_text,  # <-- Storing the scraped content
                     "status": "NEW",
                     "source": "google-serp",
                     "createdAt": datetime.now(timezone.utc).strftime(
