@@ -120,6 +120,7 @@ export class OutpostStack extends cdk.Stack {
 
     const processRunFunction = new lambda.Function(this, 'ProcessRunFunction', {
       runtime: lambda.Runtime.PYTHON_3_12,
+      architecture: lambda.Architecture.ARM_64,
       handler: 'process_run.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/python'), {
         bundling: {
@@ -127,7 +128,7 @@ export class OutpostStack extends cdk.Stack {
           command: [
             'bash',
             '-c',
-            'pip install -r requirements.txt -t /asset-output --platform manylinux2014_x86_64 --only-binary=:all: && cp -R src/handlers/* /asset-output/',
+            'pip install -r requirements.txt -t /asset-output --platform manylinux2014_aarch64 --only-binary=:all: && cp -R src/handlers/* /asset-output/',
           ],
         },
       }),
