@@ -112,6 +112,83 @@ Return JSON exactly as follows:
     return json.loads(content)
 
 
+def filter_results(results: list, query: str, groq_api_key: str) -> list:
+    if not results:
+        return []
+
+    print(f"Filtering {len(results)} results using LLM...")
+
+    # Prepare a condensed list of results for the LLM to save tokens
+    condensed_results = [
+        {
+            "index": i,
+            "title": r.get("title", ""),
+            "snippet": r.get("snippet", r.get("description", "")),
+            "domain": parse_domain(r.get("link", r.get("website", ""))),
+        }
+        for i, r in enumerate(results)
+    ]
+
+    prompt = f"""
+The user is looking for companies matching: {json.dumps(query)}
+
+Below is a list of search results. Your job is to filter out the junk.
+Identify which results are ACTUAL company homepages or about pages.
+
+REJECT the following types of results:
+- Blog posts, listicles (e.g. "10 Best Coffee Shops")
+- News articles
+- Directory listings (Yelp, TripAdvisor, LinkedIn, Crunchbase)
+- Social media profiles (Facebook, Instagram, Twitter)
+- Forum threads (Reddit, Quora)
+
+Results to evaluate:
+{json.dumps(condensed_results, indent=2)}
+
+Return ONLY a JSON object with a single key "valid_indices" containing an array of integers (the indices of the valid companies).
+{{
+  "valid_indices": [0, 2, 5]
+}}
+"""
+    headers = {
+        "Authorization": f"Bearer {groq_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": GROQ_REWRITE_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 500,
+        "temperature": 0.1,
+        "response_format": {"type": "json_object"},
+    }
+
+    try:
+        response = requests.post(
+            GROQ_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=45,
+        )
+        response.raise_for_status()
+        choices = response.json().get("choices", [])
+        if not choices:
+            return results  # Fallback if LLM fails
+
+        content = choices[0].get("message", {}).get("content", "{}")
+        result_json = json.loads(content)
+        valid_indices = set(result_json.get("valid_indices", []))
+
+        filtered = [r for i, r in enumerate(results) if i in valid_indices]
+        print(f"Filtered down to {len(filtered)} valid companies.")
+
+        # Fallback to returning all if filtering wiped out everything (safeguard)
+        return filtered if filtered else results
+
+    except Exception as e:
+        print(f"Failed to filter results: {str(e)}")
+        return results
+
+
 def handler(event: Dict[str, Any], context: Any) -> None:
     for record in event.get("Records", []):
         if record.get("eventName") != "INSERT":
@@ -198,11 +275,13 @@ def handler(event: Dict[str, Any], context: Any) -> None:
                     print(f"SerpApi fetch failed for '{sq}': {str(serp_e)}")
 
             print(f"Found {len(all_results)} total unique results")
-            results = all_results
+
+            # Filter results using LLM
+            filtered_results = filter_results(all_results, query, groq_api_key)
 
             # 3. Map to Leads
             leads = []
-            for i, r in enumerate(results):
+            for i, r in enumerate(filtered_results):
                 link = r.get("link", r.get("website", ""))
                 domain = parse_domain(link)
                 lead = {
